@@ -1,64 +1,306 @@
-1. Windows Hash – Cơ chế lưu trữ và kịch bản tấn công
-Windows không lưu mật khẩu người dùng dưới dạng plaintext mà sử dụng cơ chế băm (hash) nhằm giảm rủi ro lộ mật khẩu.
+WINDOWS CREDENTIAL – LÝ THUYẾT, BẢN CHẤT VÀ CÁC KỸ THUẬT TẤN CÔNG LIÊN QUAN
+=====================================================================
 
-1.1. Các loại Windows Hash:
-- NTLM hash: cơ chế chính được sử dụng trong xác thực Windows hiện đại.
-- LM hash: cơ chế cũ, yếu, đã bị vô hiệu hóa trên các hệ thống mới.
+I. KHÁI NIỆM CỐT LÕI
 
-1.2. Vị trí lưu trữ credential:
-- SAM Database: lưu NTLM hash của tài khoản local.
-- Registry HKLM\SAM: chỉ truy cập được với quyền SYSTEM.
-- Bộ nhớ LSASS: khi người dùng đăng nhập, hash được nạp vào bộ nhớ.
+Windows không xác thực người dùng bằng mật khẩu trong quá trình vận hành thường xuyên.
+Mật khẩu chỉ được sử dụng tại thời điểm đăng nhập ban đầu để sinh ra các vật mang danh tính
+(credential material). Sau đó, toàn bộ cơ chế xác thực và ủy quyền của Windows dựa trên các
+credential này thay vì mật khẩu gốc.
 
-1.3. Kịch bản Red Team (mô tả khái niệm):
-- Sau khi có quyền Administrator, attacker có thể tiếp cận SAM để thu thập hash.
-- Hash bị lộ có thể được tái sử dụng để xác thực trên hệ thống khác.
-- Trong môi trường domain, NTLM hash của tài khoản đặc quyền có giá trị rất cao.
+Credential material bao gồm:
+- NTLM hash
+- Kerberos key
+- Kerberos ticket (TGT, TGS)
+- Access token
 
-1.4. Ý nghĩa phòng thủ:
-- Hạn chế quyền Administrator.
-- Bật Credential Guard và vô hiệu NTLM khi có thể.
-2. LSASS – Mục tiêu trọng yếu trong tấn công nội bộ
-LSASS là tiến trình trung tâm chịu trách nhiệm xác thực và thực thi chính sách bảo mật của Windows.
+Khi một credential hợp lệ tồn tại, Windows coi nó là bằng chứng danh tính hợp pháp mà
+không phân biệt ai đang sử dụng credential đó.
 
-2.1. Thông tin nhạy cảm trong LSASS:
-- NTLM hash của user đã đăng nhập.
-- Kerberos Ticket Granting Ticket (TGT).
-- Vé dịch vụ (TGS).
-- Trong một số trường hợp: plaintext credential.
 
-2.2. Quyền và bảo vệ:
-- LSASS chạy dưới quyền SYSTEM.
-- Có thể được bảo vệ bằng Protected Process Light (PPL).
+II. BẢN CHẤT CỦA WINDOWS HASH VÀ GIAO THỨC XÁC THỰC
 
-2.3. Điều kiện tấn công (khái niệm):
-- Attacker cần quyền Administrator hoặc SYSTEM.
-- Cần các đặc quyền như SeDebugPrivilege.
+1. NTLM HASH
 
-2.4. Kịch bản Red Team thường gặp:
-- Dump bộ nhớ LSASS để thu thập credential.
-- Trích xuất Kerberos ticket để di chuyển ngang (lateral movement).
-- Lợi dụng hệ thống chưa bật PPL hoặc Credential Guard.
+NTLM hash là kết quả băm mật khẩu người dùng và đóng vai trò là một shared secret.
+Đặc điểm bản chất:
+- Tĩnh, không thay đổi theo máy, phiên hay dịch vụ
+- Không gắn ngữ cảnh sử dụng
+- Có thể được tái sử dụng trực tiếp cho xác thực
 
-2.5. Góc nhìn Blue Team:
-- Giám sát hành vi truy cập LSASS.
-- Áp dụng Attack Surface Reduction rules.
-3. Pass-the-Hash và Stealing Access Token – So sánh kịch bản tấn công
-Hai kỹ thuật này đều nhằm lạm dụng thông tin xác thực mà không cần biết mật khẩu gốc.
+Vấn đề cốt lõi của NTLM không nằm ở thuật toán băm, mà nằm ở việc NTLM hash được
+sử dụng như một khóa xác thực có thể replay.
 
-3.1. Pass-the-Hash:
-- Sử dụng NTLM hash để xác thực từ xa.
-- Thường dùng khi attacker có được hash từ SAM hoặc LSASS.
-- Hiệu quả trong môi trường domain nếu NTLM còn được cho phép.
+2. NTLM, NTLMv1, NTLMv2
 
-3.2. Stealing/Abusing Access Token:
-- Lợi dụng access token của tiến trình hợp lệ.
-- Không cần xác thực lại.
-- Rất stealth vì không tạo log đăng nhập mới.
+- NTLM là họ giao thức xác thực dựa trên challenge-response
+- NTLMv1 là phiên bản cũ, yếu
+- NTLMv2 cải tiến response nhưng không thay đổi secret gốc
 
-3.3. So sánh tổng quát:
-- Pass-the-Hash dễ bị phát hiện hơn qua log xác thực.
-- Token abuse khó phát hiện nhưng phạm vi thường giới hạn trên máy cục bộ.
-Kết luận chung
-Các kỹ thuật tấn công credential trong Windows chủ yếu khai thác việc quản lý quyền và bảo vệ chưa chặt chẽ. Việc hiểu rõ các kịch bản Red Team giúp đội ngũ phòng thủ xây dựng biện pháp phát hiện và giảm thiểu hiệu quả hơn.
+NTLMv2 vẫn sử dụng NTLM hash làm nền tảng. Vì vậy, khi NTLM hash bị lộ,
+toàn bộ các phiên bản NTLM đều bị ảnh hưởng.
 
+3. KERBEROS
+
+Kerberos là giao thức xác thực dựa trên ticket và ủy quyền theo thời gian.
+Thay vì xác thực mật khẩu trực tiếp, Kerberos xác thực ticket do KDC cấp.
+
+Bản chất của Kerberos:
+- Tin tưởng ticket, không tin nguồn
+- Ticket đại diện cho danh tính đã được xác nhận
+- Dịch vụ chỉ kiểm tra tính hợp lệ của ticket
+
+NTLM hash trong một số trường hợp có thể được sử dụng làm Kerberos key (RC4),
+tạo ra mối liên hệ giữa hai cơ chế xác thực.
+
+
+III. LSASS – BẢN CHẤT VAI TRÒ TRONG HỆ THỐNG
+
+LSASS không đơn thuần là nơi lưu trữ, mà là nơi sử dụng credential ở trạng thái hoạt động.
+Nó giữ:
+- NTLM hash đã được load
+- Kerberos ticket và session key
+- Access token
+
+Credential trong LSASS tồn tại dưới dạng đã sẵn sàng sử dụng, không còn lớp bảo vệ
+như khi lưu trữ trên đĩa.
+
+
+IV. ACCESS TOKEN – DANH TÍNH ĐÃ ĐƯỢC XÁC THỰC
+
+Access token không phải là credential xác thực mà là kết quả của xác thực.
+Token thể hiện:
+- Ai là user
+- Thuộc group nào
+- Có những privilege gì
+
+Việc lạm dụng token không tạo ra hành vi xác thực mới mà chỉ tận dụng danh tính
+đã được hệ thống chấp nhận.
+
+
+V. BẢN CHẤT CỦA TẤN CÔNG CREDENTIAL TRONG WINDOWS
+
+Các kỹ thuật tấn công credential trong Windows không phá vỡ thuật toán mã hóa.
+Chúng khai thác các đặc điểm sau:
+- Credential tồn tại dưới dạng có thể tái sử dụng
+- Credential được Windows tin tưởng tuyệt đối
+- Không có cơ chế ràng buộc người sử dụng credential
+
+Vì vậy, chiếm được credential đồng nghĩa với chiếm được danh tính.
+
+
+VI. CÁC KỸ THUẬT TẤN CÔNG LIÊN QUAN (CHỈ LIỆT KÊ TÊN)
+
+1. Credential Dumping (Tổng quát)
+- LSASS Memory Dump
+- SAM Hive Extraction
+- SYSTEM Hive Extraction
+- NTDS.dit Extraction
+- Cached Credential Dump
+- Kerberos Ticket Extraction
+- Token Stealing / Token Impersonation
+
+2. LSASS Dump – Techniques
+- Task Manager
+- Procdump
+- System Informer
+- Comsvcs.dll
+- Nanodump
+- Dumpert
+
+3. Credential Abuse
+- Pass-the-Hash
+- Pass-the-Ticket
+- Overpass-the-Hash
+- Golden Ticket
+- Silver Ticket
+- Token Abuse
+
+4. Lateral Movement liên quan Credential
+- NTLM-based Authentication Abuse
+- Kerberos-based Authentication Abuse
+- Service Account Abuse
+
+
+VII. KẾT LUẬN BẢN CHẤT
+
+Bản chất của tấn công credential trên Windows nằm ở việc chiếm đoạt các vật mang danh tính
+mà hệ điều hành đã tin tưởng. Khi hash, key, ticket hoặc token bị lộ, hệ thống không còn khả năng
+phân biệt giữa người dùng hợp pháp và kẻ tấn công, bởi mọi quyết định xác thực và ủy quyền
+đều dựa trên credential chứ không dựa trên con người.
+
+VIII. PASS-THE-HASH (PtH) – BẢN CHẤT VÀ Ý NGHĨA
+
+1. PtH KHÔNG PHẢI LÀ KỸ THUẬT BẺ KHÓA
+
+Pass-the-Hash không phá vỡ mật khẩu, không cần brute-force, không cần biết password gốc.
+Bản chất của PtH là sử dụng NTLM hash như một credential hợp lệ để thực hiện xác thực.
+
+Trong mô hình NTLM:
+- NTLM hash đóng vai trò shared secret
+- Giao thức xác thực chỉ cần chứng minh “biết hash”
+- Không yêu cầu chứng minh “biết mật khẩu”
+
+Vì vậy, nếu attacker sở hữu NTLM hash, hệ thống không có cách nào phân biệt
+giữa người dùng hợp pháp và kẻ tấn công.
+
+
+2. PtH LÀ SỰ LẠM DỤNG LOGIC TIN TƯỞNG
+
+Windows không coi NTLM hash là dữ liệu trung gian.
+Windows coi NTLM hash là bằng chứng danh tính cuối cùng.
+
+Do đó:
+- Hash hợp lệ -> xác thực hợp lệ
+- Không có khái niệm “hash bị đánh cắp”
+
+PtH thực chất là:
+“Xác thực hợp pháp bằng credential hợp pháp, nhưng bởi chủ thể không hợp pháp”.
+
+
+3. PHẠM VI ẢNH HƯỞNG CỦA PtH
+
+PtH có phạm vi rộng vì:
+- NTLM hash không gắn với máy
+- NTLM hash không gắn với phiên
+- NTLM hash có thể dùng trên nhiều hệ thống
+
+Trong môi trường domain:
+- Hash của tài khoản đặc quyền hoặc service account
+- Có thể mở rộng ảnh hưởng trên nhiều máy và dịch vụ
+
+
+4. CÁC TOOL LIÊN QUAN PtH (CHỈ LIỆT KÊ TÊN)
+
+- Mimikatz
+- Impacket
+- CrackMapExec
+- Metasploit
+- PsExec (NTLM-based usage)
+- Rubeus (khi kết hợp Overpass-the-Hash)
+
+
+IX. ACCESS TOKEN – STEALING / ABUSING TOKEN (BẢN CHẤT)
+
+1. ACCESS TOKEN KHÔNG PHẢI CREDENTIAL
+
+Access token không dùng để xác thực.
+Nó là kết quả của quá trình xác thực đã hoàn tất.
+
+Token đại diện cho:
+- Danh tính (SID)
+- Group membership
+- Privilege (SeDebug, SeImpersonate, …)
+
+Khi token tồn tại, Windows giả định rằng:
+“Danh tính này đã được xác thực và được phép hoạt động”.
+
+
+2. BẢN CHẤT CỦA STEAL TOKEN
+
+Stealing hoặc abusing token không tạo ra quá trình đăng nhập mới.
+Không có xác thực.
+Không có trao đổi hash hay ticket.
+
+Đây là hành vi:
+- Mượn danh tính đã được hệ thống chấp nhận sẵn
+- Thực thi hành động dưới quyền của token đó
+
+Windows không kiểm tra:
+- Token được tạo ra khi nào
+- Token đang bị ai sử dụng
+
+
+3. TOKEN ABUSE KHÁC PtH Ở ĐIỂM NÀO?
+
+PtH tác động vào giai đoạn xác thực (authentication).
+Token abuse tác động vào giai đoạn ủy quyền (authorization).
+
+Token abuse không cần:
+- Hash
+- Ticket
+- Password
+
+Chỉ cần:
+- Token hợp lệ tồn tại trong hệ thống
+
+
+4. PHẠM VI TOKEN ABUSE
+
+Token abuse thường:
+- Giới hạn trong máy cục bộ
+- Gắn với session đang tồn tại
+
+Tuy nhiên, trong một số kịch bản:
+- Token đặc quyền cao
+- Token dịch vụ
+có thể dẫn đến leo thang quyền hoặc pivot sang ngữ cảnh khác.
+
+
+5. CÁC TOOL LIÊN QUAN TOKEN STEALING / ABUSE (CHỈ LIỆT KÊ TÊN)
+
+- Mimikatz
+- Metasploit
+- Incognito
+- RottenPotato / JuicyPotato / RoguePotato
+- PrintSpoofer
+- PowerShell token manipulation scripts
+
+
+X. SO SÁNH BẢN CHẤT: PASS-THE-HASH VS TOKEN ABUSE
+
+Tiêu chí so sánh:
+
+Nguồn gốc:
+- Pass-the-Hash: NTLM hash (credential)
+- Token Abuse: Access token (đã xác thực)
+
+Giai đoạn bị lạm dụng:
+- Pass-the-Hash: Authentication
+- Token Abuse: Authorization
+
+Cần password:
+- Pass-the-Hash: Không
+- Token Abuse: Không
+
+Cần hash hoặc ticket:
+- Pass-the-Hash: Có
+- Token Abuse: Không
+
+Tạo sự kiện đăng nhập mới:
+- Pass-the-Hash: Có thể có
+- Token Abuse: Không
+
+Mức độ stealth:
+- Pass-the-Hash: Trung bình
+- Token Abuse: Cao
+
+Phạm vi ảnh hưởng:
+- Pass-the-Hash: Rộng (nhiều hệ thống)
+- Token Abuse: Thường cục bộ
+
+
+XI. MỐI LIÊN HỆ GIỮA LSASS, HASH VÀ TOKEN
+
+LSASS là nơi:
+- Hash được load
+- Ticket được giữ
+- Token được sinh ra
+
+Dòng chảy logic:
+Password -> Hash / Key -> Ticket -> Token
+
+Tấn công credential có thể xảy ra ở bất kỳ bước nào trong chuỗi này.
+Càng đi về cuối chuỗi (token), mức độ xác thực càng ít, mức độ tin tưởng càng cao.
+
+
+XII. KẾT LUẬN BẢN CHẤT MỞ RỘNG
+
+Pass-the-Hash và Token Abuse không phải là hai kỹ thuật đối lập,
+mà là hai điểm khai thác khác nhau trong cùng một chuỗi tin tưởng.
+
+- PtH khai thác việc Windows tin hash
+- Token abuse khai thác việc Windows tin token
+
+Cả hai đều không phá hệ thống, không vượt kiểm tra bảo mật,
+mà tận dụng các vật mang danh tính đã được hệ điều hành công nhận hợp lệ.
