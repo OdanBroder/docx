@@ -1,0 +1,19 @@
+https://github.com/outflanknl/Zipper
+https://github.com/jnqpblc/SharpDir
+https://github.com/lookbusy1344/Searcher/tree/main/SearcherCli
+
+https://gist.github.com/conholdate-gists/5c75c32a9c2dfcd6aeee53c634266130
+    https://blog.conholdate.com/total/search-text-in-pdf-documents-using-csharp/
+    
+
+other
+https://github.com/dusanrr/File-Searcher
+https://github.com/tvgdb/cobaltstrike-cat-bof
+https://github.com/boku7/xPipe
+https://github.com/boku7/whereami
+https://github.com/crypt0p3g/bof-collection
+
+
+DLL gather info:
+https://github.com/EspressoCake/DLL-Exports-Extraction-BOF
+https://github.com/EspressoCake/DLL-Hijack-Search-Order-BOF

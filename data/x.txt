@@ -1,0 +1,17 @@
+find . -type f -mtime -7          # file sửa trong 7 ngày gần đây
+find . -type f -mtime +30         # file sửa hơn 30 ngày trước
+find . -type f -atime -1          # file được truy cập trong 24h
+find . -type f -ctime -7          # file đổi metadata trong 7 ngày
+find . -type f -size +100M        # file lớn hơn 100MB
+find . -type f -size -10k         # file nhỏ hơn 10KB
+find . -type f -size +10M -size -50M  # file 10MB–50MB
+find . -type f -name "*.pdf"      # tìm file theo đuôi pdf
+find . -type f -iname "*report*"  # tìm file theo tên (ignore case)
+grep -R "error" .                 # tìm keyword trong nội dung file
+grep -Ri "token" .                # tìm keyword không phân biệt hoa thường
+grep -R "error" --include="*.log" .  # tìm keyword trong file .log
+find . -type f -name "*.js" -exec grep "TODO" {} +  # js file có TODO
+locate nginx.conf                 # tìm file nhanh bằng database
+stat filename                     # xem thông tin file (có thể có ngày tạo)
+ls -lt                            # sắp xếp file theo thời gian
+ls -lhS                           # sắp xếp file theo kích thước
